@@ -1,5 +1,6 @@
 
 const dotenv = require("dotenv");
+const mysql = require("mysql2");
 const environment = process.argv[2] || 'development';
 //const envFile = environment === 'production' ? '.env.prod' :environment === 'uat' ? '.env.uat' : '.env';
 const envFile = environment === 'production' ? '.env.prod' :
@@ -36,7 +37,22 @@ const { engine } = require ('express-handlebars');
 const Notification = require('./models/Notification');
 
 
+const db = mysql.createConnection({
+  host: "31.97.232.96",    // apna host
+  port: 3306,
+  user: "tapuser",         // apna MySQL user
+  password: "Tapdesk@123", // apna MySQL password
+  database: "tapdesk"    // apna database
+});
 
+// Check connection
+db.connect((err) => {
+  if (err) {
+    console.error("MySQL connection failed: " + err.stack);
+    return;
+  }
+  console.log("✅ Connected to MySQL as ID " + db.threadId);
+});
 
 //Employee and auth
 const authRoute = require("./routes/auth/auth");

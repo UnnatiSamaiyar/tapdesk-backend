@@ -7,7 +7,9 @@ const storage = multer.memoryStorage(); // ← THIS LINE
 const upload = multer({ storage });
 const nodemailer = require("nodemailer");
 const EmailEntry = require("../../models/Master/MasterServices");
-const RateService = require("../../models/Master/RateService"); // adjust path if needed
+const RateService = require("../../models/Master/RateService"); 
+const getModel = require("../../models/Master/ModelFactory");
+const mysql = require("mysql2/promise");
 
 router.get("/accounts", async (req, res) => {
   try {
@@ -52,55 +54,53 @@ router.get("/accounts", async (req, res) => {
 //   }
 // });
 
-router.post("/upload", async (req, res) => {
-  try {
-    const entries = req.body.data;
-    const type = req.query.type;
+// router.post("/upload", async (req, res) => {
+//   try {
+//     const entries = req.body.data;
+//     const type = req.query.type;
 
-    if (!["premium", "cli", "noncli", "cc"].includes(type)) {
-      return res.status(400).json({ message: "Invalid type" });
-    }
+//     if (!["premium", "cli", "noncli", "cc"].includes(type)) {
+//       return res.status(400).json({ message: "Invalid type" });
+//     }
 
-    if (!Array.isArray(entries) || entries.length === 0) {
-      return res.status(400).json({ message: "No data provided" });
-    }
+//     if (!Array.isArray(entries) || entries.length === 0) {
+//       return res.status(400).json({ message: "No data provided" });
+//     }
 
-    const formattedEntries = entries.map((entry) => ({
-      locationName: entry["Location Name"] || null,
-      dialCode: entry["Dial Code"] || null,
-      platinumUSD: entry["Platinum $ USD"] || null,
-      status: entry["Status"] || null,
-      effectiveDate: entry["Effective Date"] || null,
-    }));
+//     const formattedEntries = entries.map((entry) => ({
+//       locationName: entry["Location Name"] || null,
+//       dialCode: entry["Dial Code"] || null,
+//       platinumUSD: entry["Platinum $ USD"] || null,
+//       status: entry["Status"] || null,
+//       effectiveDate: entry["Effective Date"] || null,
+//     }));
 
-    let model;
-    switch (type) {
-      case "premium":
-        model = PremiumServices;
-        break;
-      case "cli":
-        model = CliServices;
-        break;
-      case "noncli":
-        model = NonCliServices;
-        break;
-      case "cc":
-        model = CcServices;
-        break;
-    }
+//     let model;
+//     switch (type) {
+//       case "premium":
+//         model = PremiumServices;
+//         break;
+//       case "cli":
+//         model = CliServices;
+//         break;
+//       case "noncli":
+//         model = NonCliServices;
+//         break;
+//       case "cc":
+//         model = CcServices;
+//         break;
+//     }
 
-    await model.insertMany(formattedEntries);
+//     await model.insertMany(formattedEntries);
 
-    res
-      .status(200)
-      .json({ message: `Data inserted into ${type} successfully.` });
-  } catch (err) {
-    console.error("Upload error:", err);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
-
-const getModel = require("../../models/Master/ModelFactory");
+//     res
+//       .status(200)
+//       .json({ message: `Data inserted into ${type} successfully.` });
+//   } catch (err) {
+//     console.error("Upload error:", err);
+//     res.status(500).json({ message: "Internal server error" });
+//   }
+// });
 
 router.get("/get-services", async (req, res) => {
   try {
@@ -109,28 +109,55 @@ router.get("/get-services", async (req, res) => {
     const locationFilter = req.query.locationFilter?.toLowerCase() || "";
     const dialCodeFilter = req.query.dialCodeFilter?.toLowerCase() || "";
 
-    const model = getModel(type);
+    // ✅ Replace spaces in table name with underscores, make lowercase
+    const fullServiceName = type.toLowerCase().replace(/\s+/g, "_");
 
-    const query = {};
-    if (locationFilter)
-      query.locationName = { $regex: locationFilter, $options: "i" };
-    if (dialCodeFilter)
-      query.dialCode = { $regex: dialCodeFilter, $options: "i" };
+    const connection = await pool.getConnection();
+    try {
+      // ✅ Build WHERE clause dynamically
+      let whereClauses = [];
+      let values = [];
 
-    const total = await model.countDocuments(query);
-    const entries = await model.find(query).skip(skip).limit(parseInt(limit));
+      if (locationFilter) {
+        whereClauses.push("LOWER(locationName) LIKE ?");
+        values.push(`%${locationFilter}%`);
+      }
 
-    res.status(200).json({
-      data: entries,
-      total,
-      page: parseInt(page),
-      totalPages: Math.ceil(total / parseInt(limit)),
-    });
+      if (dialCodeFilter) {
+        whereClauses.push("LOWER(dialCode) LIKE ?");
+        values.push(`%${dialCodeFilter}%`);
+      }
+
+      const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+
+      // ✅ Get total count
+      const [countRows] = await connection.query(
+        `SELECT COUNT(*) AS total FROM \`${fullServiceName}\` ${whereSQL}`,
+        values
+      );
+      const total = countRows[0].total;
+
+      // ✅ Fetch paginated data
+      const [entries] = await connection.query(
+        `SELECT * FROM \`${fullServiceName}\` ${whereSQL} LIMIT ? OFFSET ?`,
+        [...values, parseInt(limit), skip]
+      );
+
+      res.status(200).json({
+        data: entries,
+        total,
+        page: parseInt(page),
+        totalPages: Math.ceil(total / parseInt(limit)),
+      });
+    } finally {
+      connection.release();
+    }
   } catch (err) {
     console.error("Pagination error:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
 
 router.delete("/delete-services", async (req, res) => {
   try {
@@ -195,6 +222,17 @@ router.get("/get-services-by-location", async (req, res) => {
 
 const RateManagement = require("../../models/Master/RateManagement");
 
+const pool = mysql.createPool({
+  host: "127.0.0.1",
+  user: "root",
+  port: 3307,
+  password: "9078",
+  database: "tapdesk",
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
+
 router.post("/create-service-type", async (req, res) => {
   try {
     const { serviceName, companyName } = req.body;
@@ -205,49 +243,84 @@ router.post("/create-service-type", async (req, res) => {
         .json({ message: "Service and company name are required" });
     }
 
-    const fullServiceName = `${serviceName.toLowerCase()}_${companyName.toLowerCase()}`;
-    const NewServiceModel = getModel(fullServiceName);
+    // ✅ Replace spaces with underscores and lowercase the table name
+    const rawServiceName = `${serviceName}_${companyName}`;
+    const fullServiceName = rawServiceName.toLowerCase().replace(/\s+/g, "_");
+
     const MasterModel = mongoose.model("MasterServices");
 
-    // ✅ Step 1: Insert service reference in rate_managements immediately
+    // ✅ Step 1: Insert service reference in MongoDB rate_managements
     await RateManagement.updateOne(
       { company_name: companyName },
       { $addToSet: { services: fullServiceName } },
       { upsert: true }
     );
 
-    // ✅ Step 2: Respond instantly to frontend
+    // ✅ Step 2: Respond instantly
     res.status(202).json({
       message: `Service creation started for ${companyName}`,
-      collection: `${fullServiceName}`,
+      table: fullServiceName,
     });
 
-    // ✅ Step 3: Start background batched insert
+    // ✅ Step 3: Background SQL insert
     setImmediate(async () => {
+      const connection = await pool.getConnection();
       try {
+        // create table dynamically if not exists
+        await connection.query(`
+          CREATE TABLE IF NOT EXISTS \`${fullServiceName}\` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            locationName VARCHAR(255),
+            dialCode VARCHAR(50),
+            platinumUSD VARCHAR(50),
+            status VARCHAR(50),
+            effectiveDate VARCHAR(50),
+            createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          )
+        `);
+
         const masterCursor = MasterModel.find({}).cursor();
-        const batchSize = 1000;
+        const batchSize = 500;
         let batch = [];
 
         for await (const doc of masterCursor) {
-          batch.push(doc);
+          batch.push([
+            doc.locationName || null,
+            doc.dialCode || null,
+            doc.platinumUSD || null,
+            doc.status || null,
+            doc.effectiveDate || null,
+          ]);
 
           if (batch.length === batchSize) {
-            await NewServiceModel.insertMany(batch, { ordered: false });
+            await connection.query(
+              `INSERT INTO \`${fullServiceName}\` 
+                (locationName, dialCode, platinumUSD, status, effectiveDate) 
+               VALUES ?`,
+              [batch]
+            );
             console.log(`Inserted batch of ${batch.length}`);
             batch = [];
           }
         }
 
-        // insert any remaining documents
+        // insert remaining docs
         if (batch.length > 0) {
-          await NewServiceModel.insertMany(batch, { ordered: false });
+          await connection.query(
+            `INSERT INTO \`${fullServiceName}\` 
+              (locationName, dialCode, platinumUSD, status, effectiveDate) 
+             VALUES ?`,
+            [batch]
+          );
           console.log(`Inserted final batch of ${batch.length}`);
         }
 
-        console.log(`✅ Service ${fullServiceName} copied successfully`);
+        console.log(`✅ Service ${fullServiceName} copied successfully to SQL`);
       } catch (err) {
         console.error(`❌ Batch insert failed for ${fullServiceName}:`, err);
+      } finally {
+        connection.release();
       }
     });
   } catch (err) {
@@ -255,6 +328,7 @@ router.post("/create-service-type", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
 router.get("/get-company-services", async (req, res) => {
   try {
     const { companyName } = req.query;
@@ -284,32 +358,39 @@ router.post("/update-service-entries", async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const fullServiceName = `${serviceName.toLowerCase()}_${companyName.toLowerCase()}`;
-    const ServiceModel = getModel(fullServiceName);
+    // ✅ sanitize table name: lowercase + replace spaces with _
+    const fullServiceName = `${serviceName.toLowerCase()}_${companyName
+      .toLowerCase()
+      .replace(/\s+/g, "_")}`;
 
-    // Bulk update loop
-    const bulkOps = updates.map((item) => {
-      return {
-        updateOne: {
-          filter: { dialCode: item.dialCode }, // assuming dialCode is unique key
-          update: {
-            $set: {
-              platinumUSD: item.platinumUSD,
-              status: item.status || null,
-              effectiveDate: item.effectiveDate || null,
-            },
-          },
-        },
-      };
-    });
+    const connection = await pool.getConnection();
+    try {
+      let modifiedCount = 0;
 
-    const result = await ServiceModel.bulkWrite(bulkOps);
-    res.status(200).json({ message: "Entries updated", modifiedCount: result.modifiedCount });
+      for (const item of updates) {
+        const [result] = await connection.query(
+          `UPDATE \`${fullServiceName}\` 
+           SET platinumUSD = ?, status = ?, effectiveDate = ?, updatedAt = CURRENT_TIMESTAMP
+           WHERE dialCode = ?`,
+          [item.platinumUSD, item.status || null, item.effectiveDate || null, item.dialCode]
+        );
+
+        modifiedCount += result.affectedRows;
+      }
+
+      res.status(200).json({
+        message: "Entries updated",
+        modifiedCount,
+      });
+    } finally {
+      connection.release();
+    }
   } catch (err) {
-    console.error("Update service entries error:", err);
+    console.error("❌ Update service entries error:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
 
 
 // GET /list-service-types
@@ -365,16 +446,65 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
       : [],
   };
 
+  const connection = await pool.getConnection();
   try {
+    // ✅ Step 1: Try to send email
     await transporter.sendMail(mailOptions);
+
+    // ✅ Step 2: Log success in SQL
+    await connection.query(
+      `CREATE TABLE IF NOT EXISTS email_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        recipient_to TEXT,
+        recipient_cc TEXT,
+        recipient_bcc TEXT,
+        subject VARCHAR(255),
+        body TEXT,
+        attachment_name VARCHAR(255),
+        status VARCHAR(50),
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
+
+    await connection.query(
+      `INSERT INTO email_logs 
+        (recipient_to, recipient_cc, recipient_bcc, subject, body, attachment_name, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        to,
+        ccList.join(","),
+        bcc || null,
+        subject,
+        text,
+        attachment ? attachment.originalname : null,
+        "SENT",
+      ]
+    );
+
     res.status(200).json({ message: "Email sent successfully." });
   } catch (err) {
-    console.error("Email send error:", err);
+    console.error("❌ Email send error:", err);
+
+    // ✅ Step 3: Log failure in SQL
+    await connection.query(
+      `INSERT INTO email_logs 
+        (recipient_to, recipient_cc, recipient_bcc, subject, body, attachment_name, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        to,
+        ccList.join(","),
+        bcc || null,
+        subject,
+        text,
+        attachment ? attachment.originalname : null,
+        "FAILED",
+      ]
+    );
+
     res.status(500).json({ message: "Failed to send email." });
+  } finally {
+    connection.release();
   }
 });
-
-
-
 
 module.exports = router;
