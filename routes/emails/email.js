@@ -265,6 +265,7 @@ router.post("/create-service-type", async (req, res) => {
     // ✅ Step 3: Background SQL insert
     setImmediate(async () => {
       const connection = await pool.getConnection();
+      console.log(`🔄 Starting SQL migration for ${fullServiceName}`);
       try {
         // create table dynamically if not exists
         await connection.query(`
@@ -279,6 +280,7 @@ router.post("/create-service-type", async (req, res) => {
             updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
           )
         `);
+        console.log(`✅ Table ensured: ${fullServiceName}`);
 
         const masterCursor = MasterModel.find({}).cursor();
         const batchSize = 500;
@@ -390,8 +392,6 @@ router.post("/update-service-entries", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
-
-
 
 // GET /list-service-types
 // router.get("/list-service-types", async (req, res) => {
