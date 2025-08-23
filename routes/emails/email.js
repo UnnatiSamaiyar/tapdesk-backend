@@ -223,10 +223,10 @@ router.get("/get-services-by-location", async (req, res) => {
 const RateManagement = require("../../models/Master/RateManagement");
 
 const pool = mysql.createPool({
-  host: "127.0.0.1",
-  user: "root",
-  port: 3307,
-  password: "9078",
+  host: "31.97.232.96",
+  user: "tapuser",
+  port: 3306,
+  password: "Tapdesk@123",
   database: "tapdesk",
   waitForConnections: true,
   connectionLimit: 10,
