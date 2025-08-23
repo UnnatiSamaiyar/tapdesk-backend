@@ -104,17 +104,18 @@ router.get("/accounts", async (req, res) => {
 
 router.get("/get-services", async (req, res) => {
   try {
-    const { type = "premium", page = 1, limit = 100 } = req.query;
+    const { type, page = 1, limit = 100 } = req.query;
+    const safeType = (type && type.trim() !== "") ? type : "premium";
+    const fullServiceName = safeType.toLowerCase().replace(/\s+/g, "_");
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const locationFilter = req.query.locationFilter?.toLowerCase() || "";
     const dialCodeFilter = req.query.dialCodeFilter?.toLowerCase() || "";
 
-    // ✅ Replace spaces in table name with underscores, make lowercase
-    const fullServiceName = type.toLowerCase().replace(/\s+/g, "_");
+    console.log("Fetching services from table:", fullServiceName);
 
     const connection = await pool.getConnection();
     try {
-      // ✅ Build WHERE clause dynamically
       let whereClauses = [];
       let values = [];
 
@@ -130,14 +131,12 @@ router.get("/get-services", async (req, res) => {
 
       const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
 
-      // ✅ Get total count
       const [countRows] = await connection.query(
         `SELECT COUNT(*) AS total FROM \`${fullServiceName}\` ${whereSQL}`,
         values
       );
       const total = countRows[0].total;
 
-      // ✅ Fetch paginated data
       const [entries] = await connection.query(
         `SELECT * FROM \`${fullServiceName}\` ${whereSQL} LIMIT ? OFFSET ?`,
         [...values, parseInt(limit), skip]
@@ -157,6 +156,7 @@ router.get("/get-services", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
 
 
 router.delete("/delete-services", async (req, res) => {
