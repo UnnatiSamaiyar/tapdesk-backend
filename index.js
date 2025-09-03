@@ -44,7 +44,13 @@ const db = mysql.createConnection({
   password: "Tapdesk@123", // apna MySQL password
   database: "tapdesk"    // apna database
 });
-
+// const db = mysql.createConnection({
+//   host: "localhost",    // apna host
+//   port: 3307,
+//   user: "tapuser",         // apna MySQL user
+//   password: "9078", // apna MySQL password
+//   database: "tapdesk"    // apna database
+// });
 // Check connection
 db.connect((err) => {
   if (err) {

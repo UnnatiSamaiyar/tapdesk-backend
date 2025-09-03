@@ -7,19 +7,22 @@ const storage = multer.memoryStorage(); // ← THIS LINE
 const upload = multer({ storage });
 const nodemailer = require("nodemailer");
 const EmailEntry = require("../../models/Master/MasterServices");
-const RateService = require("../../models/Master/RateService"); 
+const RateService = require("../../models/Master/RateService");
 const getModel = require("../../models/Master/ModelFactory");
 const mysql = require("mysql2/promise");
 
 router.get("/accounts", async (req, res) => {
   try {
-    const accounts = await Account.find({}, {
-      name: 1,
-      email: 1,
-      billingEmail: 1,
-      salesEmail: 1,
-      companyName: 1
-    }).lean(); // Use lean for better performance (returns plain JS objects)
+    const accounts = await Account.find(
+      {},
+      {
+        name: 1,
+        email: 1,
+        billingEmail: 1,
+        salesEmail: 1,
+        companyName: 1,
+      }
+    ).lean(); // Use lean for better performance (returns plain JS objects)
 
     res.status(200).json(accounts);
   } catch (error) {
@@ -27,7 +30,6 @@ router.get("/accounts", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch accounts" });
   }
 });
-
 
 // router.post('/upload', async (req, res) => {
 //   try {
@@ -105,9 +107,14 @@ router.get("/accounts", async (req, res) => {
 router.get("/get-services", async (req, res) => {
   try {
     const { type, page = 1, limit = 100 } = req.query;
-    const safeType = (type && type.trim() !== "") ? type : "premium";
-    const fullServiceName = safeType.toLowerCase().replace(/\s+/g, "_");
 
+    if (!type || type.trim() === "") {
+      return res
+        .status(400)
+        .json({ message: "Missing 'type' parameter. Please provide table name." });
+    }
+
+    const fullServiceName = type.toLowerCase().replace(/\s+/g, "_");
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const locationFilter = req.query.locationFilter?.toLowerCase() || "";
     const dialCodeFilter = req.query.dialCodeFilter?.toLowerCase() || "";
@@ -129,7 +136,8 @@ router.get("/get-services", async (req, res) => {
         values.push(`%${dialCodeFilter}%`);
       }
 
-      const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+      const whereSQL =
+        whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
 
       const [countRows] = await connection.query(
         `SELECT COUNT(*) AS total FROM \`${fullServiceName}\` ${whereSQL}`,
@@ -156,7 +164,6 @@ router.get("/get-services", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
-
 
 
 router.delete("/delete-services", async (req, res) => {
@@ -211,7 +218,7 @@ router.get("/get-services-by-location", async (req, res) => {
     }
 
     // ⚠️ SQL table naming convention
-    const tableName = `services_${type}`; // Example: services_premium, services_basic
+    const tableName = `${type}`; // Example: services_premium, services_basic
 
     // Safe query with placeholders
     const [rows] = await pool.query(
@@ -238,6 +245,17 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
 });
+
+// const pool = mysql.createPool({
+//   host: "localhost",
+//   user: "tapuser",
+//   port: 3307,
+//   password: "9078",
+//   database: "tapdesk",
+//   waitForConnections: true,
+//   connectionLimit: 10,
+//   queueLimit: 0,
+// });
 
 router.post("/create-service-type", async (req, res) => {
   try {
@@ -345,10 +363,14 @@ router.get("/get-company-services", async (req, res) => {
       return res.status(400).json({ message: "Company name is required" });
     }
 
-    const record = await RateManagement.findOne({ company_name: companyName.toLowerCase() });
+    const record = await RateManagement.findOne({
+      company_name: companyName.toLowerCase(),
+    });
 
     if (!record) {
-      return res.status(404).json({ message: "No services found for this company" });
+      return res
+        .status(404)
+        .json({ message: "No services found for this company" });
     }
 
     res.status(200).json({ services: record.services });
@@ -357,7 +379,6 @@ router.get("/get-company-services", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
-
 router.post("/update-service-entries", async (req, res) => {
   try {
     const { serviceName, companyName, updates } = req.body;
@@ -366,29 +387,50 @@ router.post("/update-service-entries", async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // ✅ sanitize table name: lowercase + replace spaces with _
+    // sanitize table name
     const fullServiceName = `${serviceName.toLowerCase()}_${companyName
       .toLowerCase()
       .replace(/\s+/g, "_")}`;
 
     const connection = await pool.getConnection();
     try {
-      let modifiedCount = 0;
-
-      for (const item of updates) {
-        const [result] = await connection.query(
-          `UPDATE \`${fullServiceName}\` 
-           SET platinumUSD = ?, status = ?, effectiveDate = ?, updatedAt = CURRENT_TIMESTAMP
-           WHERE dialCode = ?`,
-          [item.platinumUSD, item.status || null, item.effectiveDate || null, item.dialCode]
-        );
-
-        modifiedCount += result.affectedRows;
+      const validUpdates = updates.filter((u) => u.dialCode);
+      if (validUpdates.length === 0) {
+        return res.status(400).json({ message: "No valid dialCodes provided" });
       }
+
+      // Prepare CASE statements
+      let updatePlatinum = "CASE dialCode ";
+      let updateStatus = "CASE dialCode ";
+      let updateEffective = "CASE dialCode ";
+      const dialCodes = [];
+
+      for (const item of validUpdates) {
+        dialCodes.push(`'${item.dialCode}'`);
+        updatePlatinum += `WHEN '${item.dialCode}' THEN ${item.platinumUSD || 0} `;
+        updateStatus += `WHEN '${item.dialCode}' THEN ${item.status ? `'${item.status}'` : 'NULL'} `;
+        updateEffective += `WHEN '${item.dialCode}' THEN ${item.effectiveDate ? `'${item.effectiveDate}'` : 'NULL'} `;
+      }
+
+      updatePlatinum += "END";
+      updateStatus += "END";
+      updateEffective += "END";
+
+      const sql = `
+        UPDATE \`${fullServiceName}\`
+        SET
+          platinumUSD = ${updatePlatinum},
+          status = ${updateStatus},
+          effectiveDate = ${updateEffective},
+          updatedAt = CURRENT_TIMESTAMP
+        WHERE dialCode IN (${dialCodes.join(",")})
+      `;
+
+      const [result] = await connection.query(sql);
 
       res.status(200).json({
         message: "Entries updated",
-        modifiedCount,
+        modifiedCount: result.affectedRows,
       });
     } finally {
       connection.release();
@@ -398,6 +440,7 @@ router.post("/update-service-entries", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
 
 // GET /list-service-types
 // router.get("/list-service-types", async (req, res) => {
@@ -422,7 +465,10 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
   const attachment = req.file;
 
   const ccList = cc
-    ? cc.split(",").map((email) => email.trim()).filter(Boolean)
+    ? cc
+        .split(",")
+        .map((email) => email.trim())
+        .filter(Boolean)
     : [];
 
   const transporter = nodemailer.createTransport({
