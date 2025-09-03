@@ -210,12 +210,18 @@ router.get("/get-services-by-location", async (req, res) => {
         .json({ message: "Missing 'type' or 'location' parameter" });
     }
 
-    const Model = getModel(type);
-    const results = await Model.find({ locationName: location });
+    // ⚠️ SQL table naming convention
+    const tableName = `services_${type}`; // Example: services_premium, services_basic
 
-    res.status(200).json({ data: results });
+    // Safe query with placeholders
+    const [rows] = await pool.query(
+      `SELECT * FROM \`${tableName}\` WHERE locationName = ?`,
+      [location]
+    );
+
+    res.status(200).json({ data: rows });
   } catch (err) {
-    console.error("Error fetching services by location:", err);
+    console.error("Error fetching services by location (SQL):", err);
     res.status(500).json({ message: "Internal server error" });
   }
 });
