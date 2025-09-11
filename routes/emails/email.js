@@ -268,7 +268,7 @@ router.post("/create-service-type", async (req, res) => {
     }
 
     // ✅ Replace spaces with underscores and lowercase the table name
-    const rawServiceName = `${serviceName}_${companyName}`;
+    const rawServiceName = `${serviceName}_service_${companyName}`;
     const fullServiceName = rawServiceName.toLowerCase().replace(/\s+/g, "_");
 
     const MasterModel = mongoose.model("MasterServices");
@@ -460,16 +460,108 @@ router.post("/update-service-entries", async (req, res) => {
 //   }
 // });
 
-router.post("/send-email", upload.single("attachment"), async (req, res) => {
-  const { to, cc, bcc, subject, text } = req.body;
-  const attachment = req.file;
+// router.post("/send-email", upload.single("attachment"), async (req, res) => {
+//   const { to, cc, bcc, subject, text } = req.body;
+//   const attachment = req.file;
 
-  const ccList = cc
-    ? cc
-        .split(",")
-        .map((email) => email.trim())
-        .filter(Boolean)
-    : [];
+//   const ccList = cc
+//     ? cc
+//         .split(",")
+//         .map((email) => email.trim())
+//         .filter(Boolean)
+//     : [];
+
+//   const transporter = nodemailer.createTransport({
+//     host: process.env.SMTP_HOST,
+//     port: parseInt(process.env.SMTP_PORT),
+//     secure: true,
+//     auth: {
+//       user: process.env.EMAIL_FROM,
+//       pass: process.env.EMAIL_PASS,
+//     },
+//   });
+
+//   const mailOptions = {
+//     from: process.env.EMAIL_FROM,
+//     to,
+//     subject,
+//     text,
+//     cc: ccList.length > 0 ? ccList : undefined,
+//     bcc: bcc || undefined,
+//     attachments: attachment
+//       ? [
+//           {
+//             filename: attachment.originalname,
+//             content: attachment.buffer,
+//           },
+//         ]
+//       : [],
+//   };
+
+//   const connection = await pool.getConnection();
+//   try {
+//     // ✅ Step 1: Try to send email
+//     await transporter.sendMail(mailOptions);
+
+//     // ✅ Step 2: Log success in SQL
+//     await connection.query(
+//       `CREATE TABLE IF NOT EXISTS email_logs (
+//         id INT AUTO_INCREMENT PRIMARY KEY,
+//         recipient_to TEXT,
+//         recipient_cc TEXT,
+//         recipient_bcc TEXT,
+//         subject VARCHAR(255),
+//         body TEXT,
+//         attachment_name VARCHAR(255),
+//         status VARCHAR(50),
+//         createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+//       )`
+//     );
+
+//     await connection.query(
+//       `INSERT INTO email_logs 
+//         (recipient_to, recipient_cc, recipient_bcc, subject, body, attachment_name, status) 
+//        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+//       [
+//         to,
+//         ccList.join(","),
+//         bcc || null,
+//         subject,
+//         text,
+//         attachment ? attachment.originalname : null,
+//         "SENT",
+//       ]
+//     );
+
+//     res.status(200).json({ message: "Email sent successfully." });
+//   } catch (err) {
+//     console.error("❌ Email send error:", err);
+
+//     // ✅ Step 3: Log failure in SQL
+//     await connection.query(
+//       `INSERT INTO email_logs 
+//         (recipient_to, recipient_cc, recipient_bcc, subject, body, attachment_name, status) 
+//        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+//       [
+//         to,
+//         ccList.join(","),
+//         bcc || null,
+//         subject,
+//         text,
+//         attachment ? attachment.originalname : null,
+//         "FAILED",
+//       ]
+//     );
+
+//     res.status(500).json({ message: "Failed to send email." });
+//   } finally {
+//     connection.release();
+//   }
+// });
+
+router.post("/send-email", upload.single("attachment"), async (req, res) => {
+  const { to, subject, text } = req.body;
+  const attachment = req.file;
 
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -486,8 +578,6 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
     to,
     subject,
     text,
-    cc: ccList.length > 0 ? ccList : undefined,
-    bcc: bcc || undefined,
     attachments: attachment
       ? [
           {
@@ -500,16 +590,14 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
 
   const connection = await pool.getConnection();
   try {
-    // ✅ Step 1: Try to send email
+    // ✅ Step 1: Send email
     await transporter.sendMail(mailOptions);
 
-    // ✅ Step 2: Log success in SQL
+    // ✅ Step 2: Create log table if not exists
     await connection.query(
       `CREATE TABLE IF NOT EXISTS email_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         recipient_to TEXT,
-        recipient_cc TEXT,
-        recipient_bcc TEXT,
         subject VARCHAR(255),
         body TEXT,
         attachment_name VARCHAR(255),
@@ -518,14 +606,13 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
       )`
     );
 
+    // ✅ Step 3: Log success
     await connection.query(
       `INSERT INTO email_logs 
-        (recipient_to, recipient_cc, recipient_bcc, subject, body, attachment_name, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        (recipient_to, subject, body, attachment_name, status) 
+       VALUES (?, ?, ?, ?, ?)`,
       [
         to,
-        ccList.join(","),
-        bcc || null,
         subject,
         text,
         attachment ? attachment.originalname : null,
@@ -537,15 +624,13 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
   } catch (err) {
     console.error("❌ Email send error:", err);
 
-    // ✅ Step 3: Log failure in SQL
+    // ✅ Step 4: Log failure
     await connection.query(
       `INSERT INTO email_logs 
-        (recipient_to, recipient_cc, recipient_bcc, subject, body, attachment_name, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        (recipient_to, subject, body, attachment_name, status) 
+       VALUES (?, ?, ?, ?, ?)`,
       [
         to,
-        ccList.join(","),
-        bcc || null,
         subject,
         text,
         attachment ? attachment.originalname : null,
