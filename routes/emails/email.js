@@ -109,9 +109,9 @@ router.get("/get-services", async (req, res) => {
     const { type, page = 1, limit = 100 } = req.query;
 
     if (!type || type.trim() === "") {
-      return res
-        .status(400)
-        .json({ message: "Missing 'type' parameter. Please provide table name." });
+      return res.status(400).json({
+        message: "Missing 'type' parameter. Please provide table name.",
+      });
     }
 
     const fullServiceName = type.toLowerCase().replace(/\s+/g, "_");
@@ -164,7 +164,6 @@ router.get("/get-services", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
-
 
 router.delete("/delete-services", async (req, res) => {
   try {
@@ -385,43 +384,76 @@ router.post("/update-service-entries", async (req, res) => {
     console.log("🔔 /update-service-entries called");
     console.log("📥 Body:", JSON.stringify(req.body).slice(0, 2000));
 
-    const { serviceName, companyName, updates, fullServiceName: providedFull } = req.body;
+    const {
+      serviceName,
+      companyName,
+      updates,
+      fullServiceName: providedFull,
+    } = req.body;
 
     // Basic validation
-    if (!providedFull && (!serviceName || !companyName || !Array.isArray(updates))) {
-      return res.status(400).json({ message: "Missing required fields", received: { serviceName, companyName, updatesLength: Array.isArray(updates) ? updates.length : null } });
+    if (
+      !providedFull &&
+      (!serviceName || !companyName || !Array.isArray(updates))
+    ) {
+      return res.status(400).json({
+        message: "Missing required fields",
+        received: {
+          serviceName,
+          companyName,
+          updatesLength: Array.isArray(updates) ? updates.length : null,
+        },
+      });
     }
 
     // Build full table name OR use provided full table name
     const fullServiceName = providedFull
       ? String(providedFull).toLowerCase()
-      : `${String(serviceName).toLowerCase()}_service_${String(companyName).toLowerCase().replace(/\s+/g, "_")}`;
+      : `${String(serviceName).toLowerCase()}_service_${String(companyName)
+          .toLowerCase()
+          .replace(/\s+/g, "_")}`;
 
     // Sanitize table name: allow only a-z0-9 and underscore
     if (!/^[a-z0-9_]+$/.test(fullServiceName)) {
-      console.warn("⚠️ Invalid table name after sanitization:", fullServiceName);
-      return res.status(400).json({ message: "Invalid table name", fullServiceName });
+      console.warn(
+        "⚠️ Invalid table name after sanitization:",
+        fullServiceName
+      );
+      return res
+        .status(400)
+        .json({ message: "Invalid table name", fullServiceName });
     }
 
     const connection = await pool.getConnection();
     try {
       // CHECK 1: table exists
-      const [tables] = await connection.query("SHOW TABLES LIKE ?", [fullServiceName]);
+      const [tables] = await connection.query("SHOW TABLES LIKE ?", [
+        fullServiceName,
+      ]);
       console.log("🔎 SHOW TABLES result length:", tables.length);
       if (!tables || tables.length === 0) {
-        return res.status(400).json({ message: "Table not found", table: fullServiceName });
+        return res
+          .status(400)
+          .json({ message: "Table not found", table: fullServiceName });
       }
 
       // OPTIONAL: inspect columns
       try {
-        const [cols] = await connection.query(`DESCRIBE \`${fullServiceName}\``);
-        console.log("🔎 Columns for", fullServiceName, "->", cols.map(c => c.Field).join(", "));
+        const [cols] = await connection.query(
+          `DESCRIBE \`${fullServiceName}\``
+        );
+        console.log(
+          "🔎 Columns for",
+          fullServiceName,
+          "->",
+          cols.map((c) => c.Field).join(", ")
+        );
       } catch (descErr) {
         console.warn("⚠️ Could not DESCRIBE table:", descErr?.message);
       }
 
       // Filter valid updates
-      const validUpdates = (updates || []).filter(u => u && u.dialCode);
+      const validUpdates = (updates || []).filter((u) => u && u.dialCode);
       if (validUpdates.length === 0) {
         return res.status(400).json({ message: "No valid dialCodes provided" });
       }
@@ -457,9 +489,15 @@ router.post("/update-service-entries", async (req, res) => {
         values.push(dc, formatDateForMySQL(item.effectiveDate));
       }
 
-      const updatePlatinum = `CASE dialCode ${platParts.join(" ")} ELSE platinumUSD END`;
-      const updateStatus = `CASE dialCode ${statusParts.join(" ")} ELSE status END`;
-      const updateEffective = `CASE dialCode ${effParts.join(" ")} ELSE effectiveDate END`;
+      const updatePlatinum = `CASE dialCode ${platParts.join(
+        " "
+      )} ELSE platinumUSD END`;
+      const updateStatus = `CASE dialCode ${statusParts.join(
+        " "
+      )} ELSE status END`;
+      const updateEffective = `CASE dialCode ${effParts.join(
+        " "
+      )} ELSE effectiveDate END`;
 
       // WHERE placeholders for dial codes
       const wherePlaceholders = dialCodes.map(() => "?").join(", ");
@@ -477,12 +515,21 @@ router.post("/update-service-entries", async (req, res) => {
       `;
 
       console.log("🧾 Generated SQL (truncated):", sql.slice(0, 1000));
-      console.log("🔢 Values length:", finalValues.length, "sample:", finalValues.slice(0, 12));
+      console.log(
+        "🔢 Values length:",
+        finalValues.length,
+        "sample:",
+        finalValues.slice(0, 12)
+      );
 
       // Run query
       try {
         const [result] = await connection.query(sql, finalValues);
-        console.log("✅ Update result:", { affectedRows: result.affectedRows, changedRows: result.changedRows, info: result.info });
+        console.log("✅ Update result:", {
+          affectedRows: result.affectedRows,
+          changedRows: result.changedRows,
+          info: result.info,
+        });
         return res.status(200).json({
           message: "Entries updated",
           modifiedCount: result.affectedRows,
@@ -495,18 +542,20 @@ router.post("/update-service-entries", async (req, res) => {
           sql: sqlErr.sql ? sqlErr.sql.slice(0, 2000) : undefined,
         });
         // give a helpful debug message (remove in prod)
-        return res.status(500).json({ message: "SQL execution error", error: sqlErr.message });
+        return res
+          .status(500)
+          .json({ message: "SQL execution error", error: sqlErr.message });
       }
     } finally {
       connection.release();
     }
   } catch (err) {
     console.error("❌ Update service entries error (outer):", err);
-    return res.status(500).json({ message: "Internal server error", error: err.message });
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: err.message });
   }
 });
-
-
 
 // GET /list-service-types
 // router.get("/list-service-types", async (req, res) => {
@@ -526,108 +575,14 @@ router.post("/update-service-entries", async (req, res) => {
 //   }
 // });
 
-// router.post("/send-email", upload.single("attachment"), async (req, res) => {
-//   const { to, cc, bcc, subject, text } = req.body;
-//   const attachment = req.file;
-
-//   const ccList = cc
-//     ? cc
-//         .split(",")
-//         .map((email) => email.trim())
-//         .filter(Boolean)
-//     : [];
-
-//   const transporter = nodemailer.createTransport({
-//     host: process.env.SMTP_HOST,
-//     port: parseInt(process.env.SMTP_PORT),
-//     secure: true,
-//     auth: {
-//       user: process.env.EMAIL_FROM,
-//       pass: process.env.EMAIL_PASS,
-//     },
-//   });
-
-//   const mailOptions = {
-//     from: process.env.EMAIL_FROM,
-//     to,
-//     subject,
-//     text,
-//     cc: ccList.length > 0 ? ccList : undefined,
-//     bcc: bcc || undefined,
-//     attachments: attachment
-//       ? [
-//           {
-//             filename: attachment.originalname,
-//             content: attachment.buffer,
-//           },
-//         ]
-//       : [],
-//   };
-
-//   const connection = await pool.getConnection();
-//   try {
-//     // ✅ Step 1: Try to send email
-//     await transporter.sendMail(mailOptions);
-
-//     // ✅ Step 2: Log success in SQL
-//     await connection.query(
-//       `CREATE TABLE IF NOT EXISTS email_logs (
-//         id INT AUTO_INCREMENT PRIMARY KEY,
-//         recipient_to TEXT,
-//         recipient_cc TEXT,
-//         recipient_bcc TEXT,
-//         subject VARCHAR(255),
-//         body TEXT,
-//         attachment_name VARCHAR(255),
-//         status VARCHAR(50),
-//         createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-//       )`
-//     );
-
-//     await connection.query(
-//       `INSERT INTO email_logs 
-//         (recipient_to, recipient_cc, recipient_bcc, subject, body, attachment_name, status) 
-//        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-//       [
-//         to,
-//         ccList.join(","),
-//         bcc || null,
-//         subject,
-//         text,
-//         attachment ? attachment.originalname : null,
-//         "SENT",
-//       ]
-//     );
-
-//     res.status(200).json({ message: "Email sent successfully." });
-//   } catch (err) {
-//     console.error("❌ Email send error:", err);
-
-//     // ✅ Step 3: Log failure in SQL
-//     await connection.query(
-//       `INSERT INTO email_logs 
-//         (recipient_to, recipient_cc, recipient_bcc, subject, body, attachment_name, status) 
-//        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-//       [
-//         to,
-//         ccList.join(","),
-//         bcc || null,
-//         subject,
-//         text,
-//         attachment ? attachment.originalname : null,
-//         "FAILED",
-//       ]
-//     );
-
-//     res.status(500).json({ message: "Failed to send email." });
-//   } finally {
-//     connection.release();
-//   }
-// });
-
 router.post("/send-email", upload.single("attachment"), async (req, res) => {
-  const { to, subject, text } = req.body;
+  const { to, cc, bcc, subject, text } = req.body;
   const attachment = req.file;
+
+  const ccList = (cc || "")
+    .split(",")
+    .map((email) => email.trim())
+    .filter(Boolean);
 
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -644,6 +599,8 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
     to,
     subject,
     text,
+    cc: ccList.length > 0 ? ccList : undefined,
+    bcc: bcc && bcc.trim() ? bcc : undefined,
     attachments: attachment
       ? [
           {
@@ -656,14 +613,16 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
 
   const connection = await pool.getConnection();
   try {
-    // ✅ Step 1: Send email
+    // ✅ Step 1: Try to send email
     await transporter.sendMail(mailOptions);
 
-    // ✅ Step 2: Create log table if not exists
+    // ✅ Step 2: Log success in SQL
     await connection.query(
       `CREATE TABLE IF NOT EXISTS email_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         recipient_to TEXT,
+        recipient_cc TEXT,
+        recipient_bcc TEXT,
         subject VARCHAR(255),
         body TEXT,
         attachment_name VARCHAR(255),
@@ -672,13 +631,14 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
       )`
     );
 
-    // ✅ Step 3: Log success
     await connection.query(
       `INSERT INTO email_logs 
-        (recipient_to, subject, body, attachment_name, status) 
-       VALUES (?, ?, ?, ?, ?)`,
+        (recipient_to, recipient_cc, recipient_bcc, subject, body, attachment_name, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         to,
+        ccList.join(","),
+        bcc || null,
         subject,
         text,
         attachment ? attachment.originalname : null,
@@ -690,13 +650,15 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
   } catch (err) {
     console.error("❌ Email send error:", err);
 
-    // ✅ Step 4: Log failure
+    // ✅ Step 3: Log failure in SQL
     await connection.query(
       `INSERT INTO email_logs 
-        (recipient_to, subject, body, attachment_name, status) 
-       VALUES (?, ?, ?, ?, ?)`,
+        (recipient_to, recipient_cc, recipient_bcc, subject, body, attachment_name, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         to,
+        ccList.join(","),
+        bcc || null,
         subject,
         text,
         attachment ? attachment.originalname : null,
@@ -709,5 +671,90 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
     connection.release();
   }
 });
+
+// router.post("/send-email", upload.single("attachment"), async (req, res) => {
+//   const { to, subject, text } = req.body;
+//   const attachment = req.file;
+
+//   const transporter = nodemailer.createTransport({
+//     host: process.env.SMTP_HOST,
+//     port: parseInt(process.env.SMTP_PORT),
+//     secure: true,
+//     auth: {
+//       user: process.env.EMAIL_FROM,
+//       pass: process.env.EMAIL_PASS,
+//     },
+//   });
+
+//   const mailOptions = {
+//     from: process.env.EMAIL_FROM,
+//     to,
+//     subject,
+//     text,
+//     attachments: attachment
+//       ? [
+//           {
+//             filename: attachment.originalname,
+//             content: attachment.buffer,
+//           },
+//         ]
+//       : [],
+//   };
+
+//   const connection = await pool.getConnection();
+//   try {
+//     // ✅ Step 1: Send email
+//     await transporter.sendMail(mailOptions);
+
+//     // ✅ Step 2: Create log table if not exists
+//     await connection.query(
+//       `CREATE TABLE IF NOT EXISTS email_logs (
+//         id INT AUTO_INCREMENT PRIMARY KEY,
+//         recipient_to TEXT,
+//         subject VARCHAR(255),
+//         body TEXT,
+//         attachment_name VARCHAR(255),
+//         status VARCHAR(50),
+//         createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+//       )`
+//     );
+
+//     // ✅ Step 3: Log success
+//     await connection.query(
+//       `INSERT INTO email_logs
+//         (recipient_to, subject, body, attachment_name, status)
+//        VALUES (?, ?, ?, ?, ?)`,
+//       [
+//         to,
+//         subject,
+//         text,
+//         attachment ? attachment.originalname : null,
+//         "SENT",
+//       ]
+//     );
+
+//     res.status(200).json({ message: "Email sent successfully." });
+//   } catch (err) {
+//     console.error("❌ Email send error:", err);
+
+//     // ✅ Step 4: Log failure
+//     await connection.query(
+//       `INSERT INTO email_logs
+//         (recipient_to, subject, body, attachment_name, status)
+//        VALUES (?, ?, ?, ?, ?)`,
+//       [
+//         to,
+//         subject,
+//         text,
+//         attachment ? attachment.originalname : null,
+//         "FAILED",
+//       ]
+//     );
+
+//     res.status(500).json({ message: "Failed to send email." });
+//   } finally {
+//     connection.release();
+//   }
+// });
 
 module.exports = router;
