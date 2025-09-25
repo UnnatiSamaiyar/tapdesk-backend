@@ -580,9 +580,9 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
   const attachment = req.file;
 
   const ccList = (cc || "")
-  .split(",")
-  .map((email) => email.trim())
-  .filter(Boolean);
+    .split(",")
+    .map((email) => email.trim())
+    .filter(Boolean);
 
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -595,16 +595,32 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
   });
 
   const mailOptions = {
-  from: process.env.EMAIL_FROM,
-  to,
-  subject,
-  text,
-  cc: ccList.length > 0 ? ccList : undefined,
-  bcc: bcc && bcc.trim() ? bcc : undefined,
-  attachments: attachment
-    ? [{ filename: attachment.originalname, content: attachment.buffer }]
-    : [],
-};
+    from: process.env.EMAIL_FROM,
+    to,
+    subject,
+    text, // fallback for non-HTML clients
+    cc: ccList.length > 0 ? ccList : undefined,
+    bcc: bcc && bcc.trim() ? bcc : undefined,
+    attachments: attachment
+      ? [{ filename: attachment.originalname, content: attachment.buffer }]
+      : [],
+    html: `
+    <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
+      <p>${text.replace(/\n/g, "<br>")}</p>
+      
+      <br><br>
+      <p>Regards,</p>
+      <p><b>Tapvox Limited (HK)</b></p>
+      <p>
+        Email: 
+        <a href="mailto:rates@tapvox.net">rates@tapvox.net</a> / 
+        <a href="mailto:sellrate@tapvox.net">sellrate@tapvox.net</a>
+      </p>
+      <br>
+      <img src="https://tapvox.net/assets/tapvox-Dj-ep3jz.png" alt="Tapvox Logo" style="max-width:150px; height:auto;" />
+    </div>
+  `,
+  };
 
   const connection = await pool.getConnection();
   try {
