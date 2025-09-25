@@ -580,9 +580,9 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
   const attachment = req.file;
 
   const ccList = (cc || "")
-    .split(",")
-    .map((email) => email.trim())
-    .filter(Boolean);
+  .split(",")
+  .map((email) => email.trim())
+  .filter(Boolean);
 
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -595,21 +595,16 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
   });
 
   const mailOptions = {
-    from: process.env.EMAIL_FROM,
-    to,
-    subject,
-    text,
-    cc: ccList.length > 0 ? ccList : undefined,
-    bcc: bcc && bcc.trim() ? bcc : undefined,
-    attachments: attachment
-      ? [
-          {
-            filename: attachment.originalname,
-            content: attachment.buffer,
-          },
-        ]
-      : [],
-  };
+  from: process.env.EMAIL_FROM,
+  to,
+  subject,
+  text,
+  cc: ccList.length > 0 ? ccList : undefined,
+  bcc: bcc && bcc.trim() ? bcc : undefined,
+  attachments: attachment
+    ? [{ filename: attachment.originalname, content: attachment.buffer }]
+    : [],
+};
 
   const connection = await pool.getConnection();
   try {
