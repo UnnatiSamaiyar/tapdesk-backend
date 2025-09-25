@@ -98,7 +98,27 @@ const emailRoute = require("./routes/emails/email")
 const app = express();
 // const wss = new WebSocket.Server({ noServer: true });
 dotenv.config();
-app.use(cors());
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://tapdesk.biz",
+  "https://tapdesk-frontend.vercel.app"
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // allow requests with no origin (like mobile apps, curl, postman)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true, // if you are sending cookies/auth headers
+  })
+);
 // const server = http.createServer(app);
 connectDB().then(() => {
   const server = 
