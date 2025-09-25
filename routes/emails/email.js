@@ -114,10 +114,7 @@ router.get("/get-services", async (req, res) => {
         .json({ message: "Missing 'type' parameter. Please provide table name." });
     }
 
-    const fullServiceName = `${serviceName.toLowerCase()}_service_${companyName
-  .toLowerCase()
-  .replace(/\s+/g, "_")}`;
-
+    const fullServiceName = type.toLowerCase().replace(/\s+/g, "_");
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const locationFilter = req.query.locationFilter?.toLowerCase() || "";
     const dialCodeFilter = req.query.dialCodeFilter?.toLowerCase() || "";
@@ -272,10 +269,7 @@ router.post("/create-service-type", async (req, res) => {
 
     // ✅ Replace spaces with underscores and lowercase the table name
     const rawServiceName = `${serviceName}_service_${companyName}`;
-    const fullServiceName = `${serviceName.toLowerCase()}_service_${companyName
-  .toLowerCase()
-  .replace(/\s+/g, "_")}`;
-
+    const fullServiceName = rawServiceName.toLowerCase().replace(/\s+/g, "_");
 
     const MasterModel = mongoose.model("MasterServices");
 
@@ -394,7 +388,7 @@ router.post("/update-service-entries", async (req, res) => {
     }
 
     // sanitize table name
-    const fullServiceName = `${serviceName.toLowerCase()}_service_${companyName
+   const fullServiceName = `${serviceName.toLowerCase()}_service_${companyName
   .toLowerCase()
   .replace(/\s+/g, "_")}`;
 
