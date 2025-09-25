@@ -379,43 +379,92 @@ router.get("/get-company-services", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
+// assumes mysql2 pool configured as `pool`
 router.post("/update-service-entries", async (req, res) => {
   try {
-    const { serviceName, companyName, updates } = req.body;
+    console.log("🔔 /update-service-entries called");
+    console.log("📥 Body:", JSON.stringify(req.body).slice(0, 2000));
 
-    if (!serviceName || !companyName || !Array.isArray(updates)) {
-      return res.status(400).json({ message: "Missing required fields" });
+    const { serviceName, companyName, updates, fullServiceName: providedFull } = req.body;
+
+    // Basic validation
+    if (!providedFull && (!serviceName || !companyName || !Array.isArray(updates))) {
+      return res.status(400).json({ message: "Missing required fields", received: { serviceName, companyName, updatesLength: Array.isArray(updates) ? updates.length : null } });
     }
 
-    // sanitize table name
-   const fullServiceName = `${serviceName.toLowerCase()}_service_${companyName
-  .toLowerCase()
-  .replace(/\s+/g, "_")}`;
+    // Build full table name OR use provided full table name
+    const fullServiceName = providedFull
+      ? String(providedFull).toLowerCase()
+      : `${String(serviceName).toLowerCase()}_service_${String(companyName).toLowerCase().replace(/\s+/g, "_")}`;
 
+    // Sanitize table name: allow only a-z0-9 and underscore
+    if (!/^[a-z0-9_]+$/.test(fullServiceName)) {
+      console.warn("⚠️ Invalid table name after sanitization:", fullServiceName);
+      return res.status(400).json({ message: "Invalid table name", fullServiceName });
+    }
 
     const connection = await pool.getConnection();
     try {
-      const validUpdates = updates.filter((u) => u.dialCode);
+      // CHECK 1: table exists
+      const [tables] = await connection.query("SHOW TABLES LIKE ?", [fullServiceName]);
+      console.log("🔎 SHOW TABLES result length:", tables.length);
+      if (!tables || tables.length === 0) {
+        return res.status(400).json({ message: "Table not found", table: fullServiceName });
+      }
+
+      // OPTIONAL: inspect columns
+      try {
+        const [cols] = await connection.query(`DESCRIBE \`${fullServiceName}\``);
+        console.log("🔎 Columns for", fullServiceName, "->", cols.map(c => c.Field).join(", "));
+      } catch (descErr) {
+        console.warn("⚠️ Could not DESCRIBE table:", descErr?.message);
+      }
+
+      // Filter valid updates
+      const validUpdates = (updates || []).filter(u => u && u.dialCode);
       if (validUpdates.length === 0) {
         return res.status(400).json({ message: "No valid dialCodes provided" });
       }
 
-      // Prepare CASE statements
-      let updatePlatinum = "CASE dialCode ";
-      let updateStatus = "CASE dialCode ";
-      let updateEffective = "CASE dialCode ";
+      // Build parameterized CASE ... WHEN ... THEN ... END statements
+      const platParts = [];
+      const statusParts = [];
+      const effParts = [];
       const dialCodes = [];
+      const values = []; // parameters in order
+
+      const formatDateForMySQL = (d) => {
+        if (!d) return null;
+        const dt = new Date(d);
+        if (isNaN(dt)) return null;
+        return dt.toISOString().slice(0, 10); // YYYY-MM-DD
+      };
 
       for (const item of validUpdates) {
-        dialCodes.push(`'${item.dialCode}'`);
-        updatePlatinum += `WHEN '${item.dialCode}' THEN ${item.platinumUSD || 0} `;
-        updateStatus += `WHEN '${item.dialCode}' THEN ${item.status ? `'${item.status}'` : 'NULL'} `;
-        updateEffective += `WHEN '${item.dialCode}' THEN ${item.effectiveDate ? `'${item.effectiveDate}'` : 'NULL'} `;
+        const dc = String(item.dialCode);
+        dialCodes.push(dc);
+
+        // platinumUSD (number)
+        platParts.push("WHEN ? THEN ?");
+        values.push(dc, Number(item.platinumUSD ?? 0));
+
+        // status (string or null)
+        statusParts.push("WHEN ? THEN ?");
+        values.push(dc, item.status ?? null);
+
+        // effectiveDate (date string or null)
+        effParts.push("WHEN ? THEN ?");
+        values.push(dc, formatDateForMySQL(item.effectiveDate));
       }
 
-      updatePlatinum += "END";
-      updateStatus += "END";
-      updateEffective += "END";
+      const updatePlatinum = `CASE dialCode ${platParts.join(" ")} ELSE platinumUSD END`;
+      const updateStatus = `CASE dialCode ${statusParts.join(" ")} ELSE status END`;
+      const updateEffective = `CASE dialCode ${effParts.join(" ")} ELSE effectiveDate END`;
+
+      // WHERE placeholders for dial codes
+      const wherePlaceholders = dialCodes.map(() => "?").join(", ");
+      // final values array: CASE placeholders already pushed; now push WHERE values
+      const finalValues = values.concat(dialCodes);
 
       const sql = `
         UPDATE \`${fullServiceName}\`
@@ -424,23 +473,39 @@ router.post("/update-service-entries", async (req, res) => {
           status = ${updateStatus},
           effectiveDate = ${updateEffective},
           updatedAt = CURRENT_TIMESTAMP
-        WHERE dialCode IN (${dialCodes.join(",")})
+        WHERE dialCode IN (${wherePlaceholders})
       `;
 
-      const [result] = await connection.query(sql);
+      console.log("🧾 Generated SQL (truncated):", sql.slice(0, 1000));
+      console.log("🔢 Values length:", finalValues.length, "sample:", finalValues.slice(0, 12));
 
-      res.status(200).json({
-        message: "Entries updated",
-        modifiedCount: result.affectedRows,
-      });
+      // Run query
+      try {
+        const [result] = await connection.query(sql, finalValues);
+        console.log("✅ Update result:", { affectedRows: result.affectedRows, changedRows: result.changedRows, info: result.info });
+        return res.status(200).json({
+          message: "Entries updated",
+          modifiedCount: result.affectedRows,
+        });
+      } catch (sqlErr) {
+        console.error("❌ SQL execution error:", {
+          code: sqlErr.code,
+          errno: sqlErr.errno,
+          sqlMessage: sqlErr.sqlMessage,
+          sql: sqlErr.sql ? sqlErr.sql.slice(0, 2000) : undefined,
+        });
+        // give a helpful debug message (remove in prod)
+        return res.status(500).json({ message: "SQL execution error", error: sqlErr.message });
+      }
     } finally {
       connection.release();
     }
   } catch (err) {
-    console.error("❌ Update service entries error:", err);
-    res.status(500).json({ message: "Internal server error" });
+    console.error("❌ Update service entries error (outer):", err);
+    return res.status(500).json({ message: "Internal server error", error: err.message });
   }
 });
+
 
 
 // GET /list-service-types
