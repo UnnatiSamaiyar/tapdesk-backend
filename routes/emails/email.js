@@ -614,7 +614,7 @@ router.post("/send-email", upload.single("attachment"), async (req, res) => {
       <p>
         Email: 
         <a href="mailto:rates@tapvox.net">rates@tapvox.net</a> / 
-        <a href="mailto:sellrate@tapvox.net">sellrate@tapvox.net</a>
+        <a href="mailto:sellrates@tapvox.net">sellrates@tapvox.net</a>
       </p>
       <br>
       <img src="https://tapvox.net/assets/tapvox-Dj-ep3jz.png" alt="Tapvox Logo" style="max-width:150px; height:auto;" />
