@@ -2,6 +2,7 @@
 # exclude everything
 uploads/task/*
 uploads/thread/*
+.env
 
 # exception to the rule
 !uploads/task/.gitkeep 
