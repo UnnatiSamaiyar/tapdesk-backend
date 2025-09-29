@@ -158,31 +158,31 @@ app.use("/file",express.static('uploads'));
 app.use("/api", authRoute);
 
 //Master Data Route
-// app.use("/api", productRoute);
-// app.use("/api", countryRoute);
-// app.use("/api", currencyRoute);
-// app.use("/api", timeZoneRoute);
-// app.use("/api", qualityCategoryRoute);
-// app.use("/api", paymentCycleRoute);
-// app.use("/api", empGroupRoute);
-// app.use("/api", destinationRoute);
+app.use("/api", productRoute);
+app.use("/api", countryRoute);
+app.use("/api", currencyRoute);
+app.use("/api", timeZoneRoute);
+app.use("/api", qualityCategoryRoute);
+app.use("/api", paymentCycleRoute);
+app.use("/api", empGroupRoute);
+app.use("/api", destinationRoute);
 
 //Routes related to accounts 
 app.use("/api", accountsRoute);
 app.use("/api", servicesRoute);
-// app.use("/api", requirementRoute);
+app.use("/api", requirementRoute);
 
-// //task and thread
-// app.use("/api", taskRoute);
-// app.use("/api", threadRoute);
-// app.use("/api/report", reportRoute);
-// app.use("/api", mapper);
-// app.use('/api', notificationRoutes);
-// app.use('/api', bulkUpload);
+//task and thread
+app.use("/api", taskRoute);
+app.use("/api", threadRoute);
+app.use("/api/report", reportRoute);
+app.use("/api", mapper);
+app.use('/api', notificationRoutes);
+app.use('/api', bulkUpload);
 
 
-// app.use('/api', routingtaskRoute);
-// app.use('/api', routingTaskThread);
+app.use('/api', routingtaskRoute);
+app.use('/api', routingTaskThread);
 
 //email route
 app.use('/api', emailRoute);
