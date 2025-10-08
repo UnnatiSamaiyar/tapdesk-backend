@@ -210,18 +210,18 @@ app.get('/', async (req, res) => {
 
 
 
-try{
-    async function main() {
-      try {
-        await fetchAndSendReport();
-      } catch (error) {
-        console.error('Error in main:', error);
-      }
-    }
-    cron.schedule('30 20 * * *',  main);
-}catch(error){
-  console.log("some error in daily task",error.message);
-}
+// try{
+//     async function main() {
+//       try {
+//         await fetchAndSendReport();
+//       } catch (error) {
+//         console.error('Error in main:', error);
+//       }
+//     }
+//     cron.schedule('30 20 * * *',  main);
+// }catch(error){
+//   console.log("some error in daily task",error.message);
+// }
 
 const PORT = process.env.PORT || 4000;
 
