@@ -24,6 +24,7 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const connectDB = require("./utils/connectDB");
+const connectOldDB = require("./utils/connectOldDB");
 const path = require('path');
 const migrateData = require('./routes/migrate')
 // const { initializeWebSocket } = require("./utils/websocketUtil");
@@ -127,6 +128,8 @@ connectDB().then(() => {
   });
     setupSocket(server);
 });
+
+connectOldDB();
 
  // Middleware to add io to request
  app.use((req, res, next) => {

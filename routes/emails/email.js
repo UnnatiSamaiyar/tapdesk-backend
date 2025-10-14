@@ -10,6 +10,7 @@ const EmailEntry = require("../../models/Master/MasterServices");
 const RateService = require("../../models/Master/RateService");
 const getModel = require("../../models/Master/ModelFactory");
 const mysql = require("mysql2/promise");
+const connectOldDB = require("../../utils/connectOldDB")
 
 let OldAccountModel;
 
