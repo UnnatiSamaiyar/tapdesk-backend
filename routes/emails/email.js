@@ -11,9 +11,19 @@ const RateService = require("../../models/Master/RateService");
 const getModel = require("../../models/Master/ModelFactory");
 const mysql = require("mysql2/promise");
 
+let OldAccountModel;
+
 router.get("/accounts", async (req, res) => {
   try {
-    const accounts = await Account.find(
+    // Create old DB connection if not already established
+    const oldDB = await connectOldDB();
+
+    // Ensure model is initialized once
+    if (!OldAccountModel) {
+      OldAccountModel = oldDB.model("Account", AccountSchema);
+    }
+
+    const accounts = await OldAccountModel.find(
       {},
       {
         name: 1,
@@ -22,14 +32,15 @@ router.get("/accounts", async (req, res) => {
         salesEmail: 1,
         companyName: 1,
       }
-    ).lean(); // Use lean for better performance (returns plain JS objects)
+    ).lean();
 
     res.status(200).json(accounts);
   } catch (error) {
-    console.error("Error fetching accounts:", error);
+    console.error("❌ Error fetching accounts from OLD DB:", error);
     res.status(500).json({ error: "Failed to fetch accounts" });
   }
 });
+
 
 // router.post('/upload', async (req, res) => {
 //   try {
