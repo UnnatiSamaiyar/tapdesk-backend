@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Account = require("../../models/Accounts");
+const AccountSchema = require("../../models/Accounts").schema;
 const { default: mongoose } = require("mongoose");
 const multer = require("multer");
 const storage = multer.memoryStorage(); // ← THIS LINE
