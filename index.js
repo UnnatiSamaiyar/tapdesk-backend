@@ -129,7 +129,7 @@ connectDB().then(() => {
     setupSocket(server);
 });
 
-connectOldDB();
+
 
  // Middleware to add io to request
  app.use((req, res, next) => {

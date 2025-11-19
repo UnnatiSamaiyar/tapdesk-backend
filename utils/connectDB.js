@@ -1,20 +1,28 @@
-const dotenv = require('dotenv');
-dotenv.config();
+// src/config/oldDb.js
+const mongoose = require("mongoose");
 
-// database connection function
-const mongoose = require('mongoose');
-mongoose.set('strictQuery', false);
+let oldConnection = null;
 
-const MONGO_URL = process.env.MONGO_URL;
-
-// function to connect with DB
-const connectDB = async () => {
-    try {
-        await mongoose.connect(MONGO_URL);
-        console.log(`Database Running ${mongoose.connection.host}`);
-    } catch (error) {
-        console.log(error)
+const connectOldDB = async () => {
+  try {
+    // 🟢 If already connected → reuse it
+    if (oldConnection && oldConnection.readyState === 1) {
+      return oldConnection;
     }
+
+    // 🟢 Create only once
+    oldConnection = await mongoose.createConnection(process.env.OLD_MONGO_URL, {
+      maxPoolSize: 20,
+      serverSelectionTimeoutMS: 5000,
+    });
+
+    console.log("✅ OLD DB connected (singleton)");
+    return oldConnection;
+
+  } catch (error) {
+    console.error("❌ Old DB connection failed:", error);
+    throw error;
+  }
 };
 
-module.exports = connectDB;
+module.exports = connectOldDB;
