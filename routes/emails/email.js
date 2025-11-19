@@ -11,7 +11,7 @@ const EmailEntry = require("../../models/Master/MasterServices");
 const RateService = require("../../models/Master/RateService");
 const getModel = require("../../models/Master/ModelFactory");
 const mysql = require("mysql2/promise");
-const connectOldDB = require("../../utils/connectOldDB")
+const connectOldDB = require("../../utils/connectOldDB");
 
 let OldAccountModel;
 
@@ -42,7 +42,6 @@ router.get("/accounts", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch accounts" });
   }
 });
-
 
 // router.post('/upload', async (req, res) => {
 //   try {
@@ -119,15 +118,16 @@ router.get("/accounts", async (req, res) => {
 
 router.get("/get-services", async (req, res) => {
   try {
-    const { type, page = 1, limit = 100 } = req.query;
+    const { page = 1, limit = 100 } = req.query;
+    let type = (req.query.type || "").toString().trim().toLowerCase();
 
-    if (!type || type.trim() === "") {
-      return res.status(400).json({
-        message: "Missing 'type' parameter. Please provide table name.",
-      });
+    // if no type provided, set a safe default (adjust 'premium' if you prefer another default)
+    if (!type) {
+      type = "premium";
     }
 
     const fullServiceName = type.toLowerCase().replace(/\s+/g, "_");
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const locationFilter = req.query.locationFilter?.toLowerCase() || "";
     const dialCodeFilter = req.query.dialCodeFilter?.toLowerCase() || "";
