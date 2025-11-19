@@ -129,6 +129,18 @@ connectDB().then(() => {
     setupSocket(server);
 });
 
+(async () => {
+  try {
+    await connectDB();   // ensures only ONE mongoose connection
+    const server = app.listen(PORT, () => console.log('Server running on port', PORT));
+    setupSocket(server);
+  } catch (err) {
+    console.error('Failed to start, DB connect error', err);
+    process.exit(1);
+  }
+})();
+
+
 
 
  // Middleware to add io to request
