@@ -1,28 +1,29 @@
-// src/config/oldDb.js
-const mongoose = require("mongoose");
+// utils/connectOldDB.js
+const mongoose = require('mongoose');
 
 let oldConnection = null;
 
-const connectOldDB = async () => {
+async function connectOldDB() {
   try {
-    // 🟢 If already connected → reuse it
-    if (oldConnection && oldConnection.readyState === 1) {
-      return oldConnection;
-    }
+    if (oldConnection && oldConnection.readyState === 1) return oldConnection;
 
-    // 🟢 Create only once
-    oldConnection = await mongoose.createConnection(process.env.OLD_MONGO_URL, {
-      maxPoolSize: 20,
+    const uri = (process.env.OLD_MONGO_URL || '').trim();
+    if (!uri) throw new Error('OLD_MONGO_URL is required');
+
+    // createConnection returns a separate connection instance (good for old DB)
+    oldConnection = await mongoose.createConnection(uri, {
+      maxPoolSize: parseInt(process.env.OLD_MONGO_POOL || '20', 10),
       serverSelectionTimeoutMS: 5000,
+      // no buffering indefinitely
+      bufferCommands: false,
     });
 
-    console.log("✅ OLD DB connected (singleton)");
+    console.log('✅ OLD DB connected (singleton)');
     return oldConnection;
-
-  } catch (error) {
-    console.error("❌ Old DB connection failed:", error);
-    throw error;
+  } catch (err) {
+    console.error('❌ Old DB connection failed:', err);
+    throw err;
   }
-};
+}
 
 module.exports = connectOldDB;
