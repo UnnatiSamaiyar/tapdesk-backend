@@ -121,14 +121,6 @@ app.use(
   })
 );
 // const server = http.createServer(app);
-connectDB().then(() => {
-  const server = 
-  app.listen(PORT, () => {
-    console.log("Server running on port:", PORT);
-  });
-    setupSocket(server);
-});
-
 (async () => {
   try {
     await connectDB();   // ensures only ONE mongoose connection
@@ -139,6 +131,7 @@ connectDB().then(() => {
     process.exit(1);
   }
 })();
+
 
 
 
