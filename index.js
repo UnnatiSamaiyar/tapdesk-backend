@@ -8,7 +8,6 @@ const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
-const mysql = require("mysql2");
 const dotenv = require("dotenv");
 
 // -------------------------------------
@@ -30,30 +29,12 @@ console.log(`Environment file loaded: ${envFile}`);
 console.log(`Frontend: ${process.env.FRONTEND_URL}`);
 
 // -------------------------------------
-// Import DB connectors
+// DB connectors
 // -------------------------------------
 const connectDB = require("./utils/connectDB");
 const connectOldDB = require("./utils/connectOldDB");
+// global MySQL pool (used in routes, e.g. email.js)
 const pool = require("./utils/sqlPool");
-
-// -------------------------------------
-// MySQL CONNECTION
-// -------------------------------------
-const db = mysql.createConnection({
-  host: process.env.SQL_HOST,
-  port: process.env.SQL_PORT,
-  user: process.env.SQL_USER,
-  password: process.env.SQL_PASSWORD,
-  database: process.env.SQL_DATABASE,
-});
-
-db.connect((err) => {
-  if (err) {
-    console.error("❌ MySQL connection failed:", err);
-  } else {
-    console.log("✅ Connected to MySQL as ID", db.threadId);
-  }
-});
 
 // -------------------------------------
 // EXPRESS SETUP
@@ -68,7 +49,12 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("CORS blocked: " + origin));
+    },
     credentials: true,
   })
 );
@@ -119,8 +105,8 @@ const PORT = process.env.PORT || 4000;
 
 async function startServer() {
   try {
-    await connectDB();
-    await connectOldDB();
+    await connectDB();      // Main Mongo
+    await connectOldDB();   // Old Mongo
 
     const server = app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
