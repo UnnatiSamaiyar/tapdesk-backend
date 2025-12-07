@@ -25,16 +25,9 @@ router.get("/accounts", async (req, res) => {
       OldAccountModel = oldDB.model("Account", AccountSchema);
     }
 
-    const accounts = await OldAccountModel.find(
-      {},
-      {
-        name: 1,
-        email: 1,
-        billingEmail: 1,
-        salesEmail: 1,
-        companyName: 1,
-      }
-    ).lean();
+    if (oldDB.readyState !== 1) {
+      return res.status(500).json({ error: "Old DB not connected yet" });
+    }
 
     res.status(200).json(accounts);
   } catch (error) {
@@ -128,11 +121,21 @@ router.get("/get-services", async (req, res) => {
     // If no type provided, try infer from companyName
     if (!type) {
       if (!companyName) {
-        return res.status(400).json({ message: "Missing 'type' or 'companyName' parameter" });
+        return res
+          .status(400)
+          .json({ message: "Missing 'type' or 'companyName' parameter" });
       }
-      const record = await RateManagement.findOne({ company_name: companyName.toLowerCase() }).lean();
-      if (!record || !Array.isArray(record.services) || record.services.length === 0) {
-        return res.status(404).json({ message: "No services found for this company" });
+      const record = await RateManagement.findOne({
+        company_name: companyName.toLowerCase(),
+      }).lean();
+      if (
+        !record ||
+        !Array.isArray(record.services) ||
+        record.services.length === 0
+      ) {
+        return res
+          .status(404)
+          .json({ message: "No services found for this company" });
       }
       if (record.services.length === 1) {
         type = record.services[0]; // already full table name like 'ncli_service_beox'
@@ -143,7 +146,9 @@ router.get("/get-services", async (req, res) => {
     }
 
     // if type looks like a shorthand (premium/cli/etc) convert to table name
-    const fullServiceName = type.includes("_service_") ? type : type.replace(/\s+/g, "_");
+    const fullServiceName = type.includes("_service_")
+      ? type
+      : type.replace(/\s+/g, "_");
 
     console.log("Fetching services from table:", fullServiceName);
 
@@ -162,7 +167,8 @@ router.get("/get-services", async (req, res) => {
         values.push(`%${dialCodeFilter}%`);
       }
 
-      const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+      const whereSQL =
+        whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
 
       const [countRows] = await connection.query(
         `SELECT COUNT(*) AS total FROM \`${fullServiceName}\` ${whereSQL}`,
@@ -189,7 +195,6 @@ router.get("/get-services", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
-
 
 router.delete("/delete-services", async (req, res) => {
   try {
@@ -260,16 +265,7 @@ router.get("/get-services-by-location", async (req, res) => {
 
 const RateManagement = require("../../models/Master/RateManagement");
 
-const pool = mysql.createPool({
-  host: "31.97.232.96",
-  user: "tapuser",
-  port: 3306,
-  password: "Tapdesk@123",
-  database: "tapdesk",
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
+const pool = require("../../utils/sqlPool");
 
 // const pool = mysql.createPool({
 //   host: "localhost",
