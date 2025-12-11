@@ -17,10 +17,8 @@ let OldAccountModel;
 
 router.get("/accounts", async (req, res) => {
   try {
-    // Create old DB connection if not already established
     const oldDB = await connectOldDB();
 
-    // Ensure model is initialized once
     if (!OldAccountModel) {
       OldAccountModel = oldDB.model("Account", AccountSchema);
     }
@@ -29,12 +27,17 @@ router.get("/accounts", async (req, res) => {
       return res.status(500).json({ error: "Old DB not connected yet" });
     }
 
-    res.status(200).json(accounts);
+    // ✅ Fetch accounts from old DB
+    const accounts = await OldAccountModel.find({}).lean();
+
+    return res.status(200).json(accounts);
+
   } catch (error) {
     console.error("❌ Error fetching accounts from OLD DB:", error);
     res.status(500).json({ error: "Failed to fetch accounts" });
   }
 });
+
 
 // router.post('/upload', async (req, res) => {
 //   try {
